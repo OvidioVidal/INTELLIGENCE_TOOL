@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Email Composer for News Parser
-Creates well-structured emails from grouped.json with filtering options
-"""
-
 import json
 import argparse
 import sys
@@ -187,7 +182,10 @@ class EmailComposer:
                 emoji = self.get_sector_emoji(sector)
                 summary_lines.append(f"{emoji} {sector} ({len(items)} items)")
                 for item in items:
-                    summary_lines.append(f"  {item['title']}")
+                    # Remove leading numbers (e.g., "1. ", "42. ") from titles for cleaner grouping
+                    title = item['title']
+                    title_clean = re.sub(r'^\d+\.\s*', '', title)
+                    summary_lines.append(f"  • {title_clean}")
                 summary_lines.append("")
                 total_items += len(items)
 
