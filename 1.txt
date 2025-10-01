@@ -1,0 +1,30 @@
+### Phase 1: Foundation (Security & Config)
+1. Create `.env` file for email credentials
+2. Create/update `.gitignore` to protect sensitive files
+3. Create `requirements.txt` with all dependencies
+4. Install dependencies: `pip install -r requirements.txt`
+
+### Phase 2: Email Automation
+5. Modify AUTO_INPUT.py to:
+   - Load credentials from .env
+   - Save email body to input_email.txt
+   - Track processed Message-IDs (avoid duplicates)
+   - Extract only the email body (not headers)
+6. Create `email_monitor.py` for background monitoring with IMAP IDLE
+7. Refactor main.py into callable functions
+
+### Phase 3: Dashboard & Analytics
+8. Create `db_analytics.py` with query functions for:
+   - Deal statistics (by sector, date, value)
+   - Time series data
+   - Search/filter capabilities
+9. Create `dashboard.py` Streamlit app with:
+   - Email monitor controls (start/stop/status)
+   - Analytics visualizations (charts, KPIs)
+   - Deal browser (searchable table)
+   - Settings page
+
+### Phase 4: Integration & Testing
+10. Test email monitoring → auto-processing flow
+11. Test dashboard displays data correctly
+12. Add error handling and logging throughout
