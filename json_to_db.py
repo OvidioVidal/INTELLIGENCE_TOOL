@@ -277,6 +277,74 @@ def import_json_to_db(json_file: str = 'grouped.json'):
     print(f"{'='*60}")
 
 
+def import_data(grouped_data: Dict, email_metadata: Dict):
+    """Import data directly with custom email metadata (for dashboard use)."""
+    print(f"Importing data with subject: {email_metadata.get('subject', 'N/A')}")
+
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    # Create database schema if needed
+    create_database()
+
+    # Insert email metadata
+    email_id = insert_email(cursor, email_metadata)
+
+    if not email_id:
+        print("Error: Could not insert or find email metadata")
+        conn.close()
+        return False
+
+    print(f"[OK] Email processed (ID: {email_id})")
+
+    # Process each category
+    total_deals = 0
+    skipped_deals = 0
+
+    for category_name, deals in grouped_data.items():
+        if category_name == '_email_metadata':
+            continue
+
+        print(f"\nProcessing category: {category_name}")
+        category_id = insert_category(cursor, category_name)
+
+        if not category_id:
+            print(f"  Warning: Could not process category {category_name}")
+            continue
+
+        # Process each deal in the category
+        for deal in deals:
+            deal_id = insert_deal(cursor, email_id, category_id, deal)
+
+            if deal_id:
+                # Insert related data
+                details = deal.get('details', {})
+                bullets = details.get('bullets', [])
+                links = details.get('links', [])
+                metadata = details.get('metadata', {})
+
+                insert_bullets(cursor, deal_id, bullets)
+                insert_links(cursor, deal_id, links)
+                insert_metadata(cursor, deal_id, metadata)
+
+                total_deals += 1
+                print(f"  [NEW] {deal.get('title', 'Untitled')[:60]}")
+            else:
+                skipped_deals += 1
+
+    conn.commit()
+    conn.close()
+
+    print(f"\n{'='*60}")
+    print(f"Import complete!")
+    print(f"New deals imported: {total_deals}")
+    print(f"Duplicate deals skipped: {skipped_deals}")
+    print(f"Database: {DB_FILE}")
+    print(f"{'='*60}")
+
+    return True
+
+
 def main():
     """Main execution function."""
     print("Starting database import process...\n")
