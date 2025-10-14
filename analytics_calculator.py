@@ -29,6 +29,7 @@ class AnalyticsCalculator:
     def __init__(self, db_file: str = DB_FILE):
         """Initialize the calculator with database connection and PE classifier."""
         self.db_file = db_file
+        self._ensure_database_exists()
         # Initialize the trained PE fund classifier if available
         if CLASSIFIER_AVAILABLE:
             try:
@@ -40,6 +41,95 @@ class AnalyticsCalculator:
         else:
             self.pe_classifier = None
             print("[INFO] Using basic pattern matching for PE firm extraction")
+
+    def _ensure_database_exists(self):
+        """Create database with schema if it doesn't exist."""
+        import os
+        if not os.path.exists(self.db_file):
+            print(f"[INFO] Database not found. Creating {self.db_file}...")
+            self._create_database_schema()
+
+    def _create_database_schema(self):
+        """Create database tables with proper schema."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        # Email metadata table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                parsed_date TEXT NOT NULL,
+                UNIQUE(subject, timestamp)
+            )
+        ''')
+
+        # Categories table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            )
+        ''')
+
+        # Deals/Intelligence entries table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS deals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email_id INTEGER NOT NULL,
+                category_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT,
+                intelligence_id TEXT UNIQUE,
+                source TEXT,
+                value TEXT,
+                stake_value TEXT,
+                grade TEXT,
+                alert_type TEXT,
+                FOREIGN KEY (email_id) REFERENCES emails(id),
+                FOREIGN KEY (category_id) REFERENCES categories(id),
+                UNIQUE(intelligence_id)
+            )
+        ''')
+
+        # Bullets table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS deal_bullets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                deal_id INTEGER NOT NULL,
+                bullet_text TEXT NOT NULL,
+                FOREIGN KEY (deal_id) REFERENCES deals(id),
+                UNIQUE(deal_id, bullet_text)
+            )
+        ''')
+
+        # Links table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS deal_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                deal_id INTEGER NOT NULL,
+                link_url TEXT NOT NULL,
+                FOREIGN KEY (deal_id) REFERENCES deals(id),
+                UNIQUE(deal_id, link_url)
+            )
+        ''')
+
+        # Metadata table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS deal_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                deal_id INTEGER NOT NULL,
+                key TEXT NOT NULL,
+                value TEXT,
+                FOREIGN KEY (deal_id) REFERENCES deals(id),
+                UNIQUE(deal_id, key)
+            )
+        ''')
+
+        conn.commit()
+        conn.close()
+        print(f"[OK] Database schema created: {self.db_file}")
 
     def _get_connection(self):
         """Create a database connection."""
@@ -97,7 +187,7 @@ class AnalyticsCalculator:
                 SELECT COUNT(*) as total
                 FROM deals d
                 JOIN emails e ON d.email_id = e.id
-                WHERE e.parsed_date BETWEEN ? AND ?
+                WHERE DATE(e.parsed_date) BETWEEN ? AND ?
             """
             result = pd.read_sql_query(query, conn, params=[start_date, end_date])
         else:
@@ -129,7 +219,7 @@ class AnalyticsCalculator:
                 FROM deals d
                 JOIN categories c ON d.category_id = c.id
                 JOIN emails e ON d.email_id = e.id
-                WHERE e.parsed_date BETWEEN ? AND ?
+                WHERE DATE(e.parsed_date) BETWEEN ? AND ?
                 GROUP BY c.name
                 ORDER BY deal_count DESC
             """
@@ -167,13 +257,13 @@ class AnalyticsCalculator:
 
         query = """
             SELECT
-                strftime('%Y-%m', e.parsed_date) as month,
+                strftime('%Y-%m', DATE(e.parsed_date)) as month,
                 c.name as sector,
                 COUNT(*) as deal_count
             FROM deals d
             JOIN categories c ON d.category_id = c.id
             JOIN emails e ON d.email_id = e.id
-            WHERE e.parsed_date >= ?
+            WHERE DATE(e.parsed_date) >= ?
             GROUP BY month, c.name
             ORDER BY month, deal_count DESC
         """
@@ -456,7 +546,7 @@ class AnalyticsCalculator:
                 FROM deals d
                 JOIN emails e ON d.email_id = e.id
                 LEFT JOIN deal_metadata dm ON d.id = dm.deal_id
-                WHERE e.parsed_date BETWEEN ? AND ?
+                WHERE DATE(e.parsed_date) BETWEEN ? AND ?
             """
             deals = pd.read_sql_query(query, conn, params=[start_date, end_date])
         else:
@@ -523,7 +613,7 @@ class AnalyticsCalculator:
                     COUNT(*) as deal_count
                 FROM deals d
                 JOIN emails e ON d.email_id = e.id
-                WHERE e.parsed_date BETWEEN ? AND ?
+                WHERE DATE(e.parsed_date) BETWEEN ? AND ?
                 GROUP BY grade
                 ORDER BY deal_count DESC
             """
@@ -563,7 +653,7 @@ class AnalyticsCalculator:
                     COUNT(*) as deal_count
                 FROM deals d
                 JOIN emails e ON d.email_id = e.id
-                WHERE e.parsed_date BETWEEN ? AND ?
+                WHERE DATE(e.parsed_date) BETWEEN ? AND ?
                 GROUP BY region
                 ORDER BY deal_count DESC
             """

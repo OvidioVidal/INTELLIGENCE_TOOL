@@ -9,6 +9,21 @@ from datetime import datetime
 
 
 class EmailComposer:
+    # Relevant sectors to keep in the email
+    RELEVANT_SECTORS = {
+        "automotive",
+        "computer software",
+        "consumer: foods",
+        "consumer: other",
+        "consumer: retail",
+        "defense",
+        "financial services",
+        "industrial automation",
+        "industrial products and services",
+        "industrial: electronics",
+        "services (other)"
+    }
+
     def __init__(self, data_file: str = "grouped.json"):
         """Initialize with the parsed data file."""
         self.data_file = Path(data_file)
@@ -27,7 +42,8 @@ class EmailComposer:
             sys.exit(1)
 
     def filter_sectors(self, include_sectors: Optional[List[str]] = None,
-                      exclude_sectors: Optional[List[str]] = None) -> Dict[str, Any]:
+                      exclude_sectors: Optional[List[str]] = None,
+                      use_relevant_only: bool = True) -> Dict[str, Any]:
         """Filter data by including or excluding specific sectors."""
         filtered_data = {}
 
@@ -42,8 +58,13 @@ class EmailComposer:
 
             include_sector = True
 
+            # First, apply relevant sectors filter if enabled
+            if use_relevant_only:
+                include_sector = any(rel_sector in sector.lower() or sector.lower() in rel_sector
+                                   for rel_sector in self.RELEVANT_SECTORS)
+
             # Check include filter (if specified, only include these sectors)
-            if include_sectors:
+            if include_sectors and include_sector:
                 include_sector = any(inc.lower() == sector.lower() for inc in include_sectors)
 
             # Check exclude filter (if specified, exclude these sectors)
@@ -182,10 +203,8 @@ class EmailComposer:
                 emoji = self.get_sector_emoji(sector)
                 summary_lines.append(f"{emoji} {sector} ({len(items)} items)")
                 for item in items:
-                    # Remove leading numbers (e.g., "1. ", "42. ") from titles for cleaner grouping
-                    title = item['title']
-                    title_clean = re.sub(r'^\d+\.\s*', '', title)
-                    summary_lines.append(f"  • {title_clean}")
+                    # Keep the original title with its number
+                    summary_lines.append(f"  {item['title']}")
                 summary_lines.append("")
                 total_items += len(items)
 
